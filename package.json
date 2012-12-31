@@ -1,0 +1,24 @@
+{
+  "name": "untangle",
+  "version": "1.0.0",
+  "main": "untangle",
+  "keywords": [
+    "Asynch",
+    "Condition",
+    "Dispatcher",
+    "Pool"
+  ],
+  "author": "hyperandroid <hyperandroid@gmail.com> (http://labs.hyperandroid.com)",
+  "description": "An asynchronous utility library for Node",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/hyperandroid/Untangle.git"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "optionalDependencies": {},
+  "engines": {
+    "node": "*"
+  },
+  "homepage": "http://github.com/hyperandroid/untangle"
+}
