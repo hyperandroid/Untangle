@@ -38,7 +38,7 @@ because they are all busy, a Dispatcher object queues the task submission reques
 A dispatcher, accepts asynchronous functions through out the following methods:
 
 * submit( {function( _u.Future ), timeout )
-* submitNodeSequence( {( function | Array.<function()> )}, timeout )
+* submitNodeSequence( {( function | Array.<function()> )}, timeout {number}, haltOnError {Boolean} )
 * submitChained( {function( _u.Condition, * )}, timeout )
 
 as a result of all calling these methods, a Dispatcher instance returns a <code>_u.Future</code> object upon which
@@ -56,35 +56,170 @@ When one worker expires, the Dispatcher simply creates a new one and kills expir
 that a task running in a Worker may still be active when it has timed out, but it is guaranteed it will not notify
 the task associated Future object.
 
-### submit function.
+### submitAsNodeSequence
+
+This function executes an array of functions in an effort to untangle NodeJS callback nightmare.
+From this:
+
+```javascript
+
+fn( p0, p1, p2, function(err) {
+  if (err) {
+    throw err;
+  }
+
+  fn2( a1, a2, function(err) {
+    ...
+  }
+
+}
+```
+
+you can move to:
+
+```javascript
+
+var future= dispatcher.submitAsNodeSequence([
+    function(p0,p1,p2) {
+        ...
+    },
+    function(err) {
+        ...
+    },
+    ...
+]);
+
+```
+
+Each Sequence function must follow NodeJS convention by having a first err parameter.
+And in order to have the function sequence flowing, each function must:
+
+* return a value, which will be set as second parameter for the next sequence function
+* set 'this' as asynchronous function callback
+
+For example:
+
+```javascript
+var fs= require('fs');
+var _u= require('../untangle');
+var assert= require('assert');
+
+var sequencer= new _u.Dispatcher();
+
+sequencer.submitNodeSequence( [
+        function( err ) {
+            console.log("sequencer seq1");
+            fs.readFile('/tmp/version.nfo', 'utf-8', this);  // set this as asynchronous function callback
+        },
+        function( err, content ) {                  // content has the return value for fs.readFile
+            if (err) {
+                console.log("error reading file");
+                throw "error node series";
+            }
+            console.log("sequencer seq2");
+            console.log(content);
+            return 1
+        },
+        function( err, abcd ) {                     // abcd has value 1.
+            console.log("sequencer seq3");
+            return "All set";                       // if no return value, the future will get undefined
+        }
+    ],
+    0 ).
+    waitForValueSet( function(future) {
+        console.log("Future1 set value: "+future.getValue());
+    });
+```
+
+The flow of this functions sequence may be altered if one of the functions throws an object and
+<code>haltOnError</code> is set to true. True is the default value.
+In this case, the sequence flow will be interrupted, and the future will have set the value of the throws clause.
+If <code>haltOnError</code> is set to false, the sequence will continue, and the next function in the sequence will
+receive the thrown error as value in its err parameter.
+
+```javascript
+sequencer.submitNodeSequence( [
+        function fn1( err ) {
+            console.log("sequencer seq1");
+            fs.readFile('/tmp/this will cause an error.nfo', 'utf-8', this);  // set this as asynchronous function callback
+        },
+        function fn2( err, content ) {                  // content has the return value for fs.readFile
+            if (err) {
+                console.log("error reading file");
+                throw new Error("error node series");
+            }
+            console.log("sequencer seq2");
+            console.log(content);
+            return 1
+        },
+        function fn3( err, abcd ) {                     // abcd has value 1.
+            console.log("Err has value: "+err);
+            console.log("sequencer seq3");
+            return "All set";                       // if no return value, the future will get undefined
+        }
+    ],
+    0,
+    false ).                                        // will not halt on error.
+    waitForValueSet( function(future) {
+        console.log("Future2 set value: "+future.getValue());
+    });
+
+    // in this case, fn3 will receive an Error object as err parameter.
+```
+
+### submit
 
 This is the very basic way of working for a dispatcher object.
 A function which receives a Future object instance is passed as parameter. The same Future object is returned when
 calling submit.
+This function is intended for wrapping up NodeJS legacy code. Take all the asynchronous callback tangle and put
+it all into one single schedulable function.
 
 The task is scheduled to be executed sometime in the future.
 
 ```javascript
 
+var _u= require('../untangle');
+var assert= require('assert');
+
 var dispatcher= new _u.Dispatcher();    // create 1 worker.
 
 var future= dispatcher.submit( function(f) {
-        setTimeout( function() {        // simulate asynchronous by timeout-ing a function.
+        // simulate asynchronous by timeout-ing a function.
+        setTimeout( function() {
+            // f and the return Future object, are the same one.
+            f.setValue("this value comes from the future");
 
-                // f and the return Future object, are the same one.
-                f.setValue("value from the future");
-
-            },
-            200 );
-    }, 0 ); // submit w/o timeout
+        },
+        500 );
+    },
+    1000 ); // submit w/o timeout
 
 // pass along this future object, for lazy evaluation.
-
 future.waitForValueSet( function(f) {
     console.log("Value from the future: "+f.getValue());
 });
 
+
+// this other future object will timeout.
+var future2= dispatcher.submit( function(f) {
+        // simulate asynchronous by timeout-ing a function.
+        setTimeout( function() {
+            // f and the return Future object, are the same one.
+            f.setValue("this value will not come from the future");
+        },
+        200 );
+    },
+    100 ); // submit w/o timeout
+
+future2.waitForValueSet( function(f) {
+    console.log("Value from the future: "+f.getValue());
+});
+
 ```
+
+###
+
 
 
 

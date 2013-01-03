@@ -1149,8 +1149,11 @@
             return task.getFuture();
         },
 
-        submitNodeSequence : function( _task, _timeout ) {
+        submitNodeSequence : function( _task, _timeout, haltOnError ) {
 
+            if (typeof haltOnError==='undefined') {
+                haltOnError= true;
+            }
             var task;
 
             if ( Object.prototype.toString.call( _task ) === '[object Array]' ) {
@@ -1168,30 +1171,36 @@
                         var pendingTasks= Array.prototype.slice.call( _task );
 
                         function iterate() {
-
+/**
                             if (pendingTasks.length===0) {
                                 if (arguments[0]) {
                                     future.setValue(arguments[0]);
                                 }
                                 return;
                             }
-
+*/
                             var fn= pendingTasks.shift();
                             var retValue;
 
                             try {
                                 retValue= fn.apply( iterate, arguments );
+                                if (retValue && pendingTasks.length) {
+                                    iterate(undefined, retValue);
+                                }
+                                if (pendingTasks.length===0) {
+                                    future.setValue(retValue);
+                                }
                             } catch(e) {
-                                iterate(e);
+                                if (haltOnError) {
+                                    future.setValue(e);
+                                } else {
+                                    iterate(e);
+                                }
                             }
 
-                            if (retValue && pendingTasks.length) {
-                                iterate( undefined, retValue );
-                            }
 
-                            if (pendingTasks.length===0) {
-                                future.setValue(retValue);
-                            }
+
+
 
                         }
 
