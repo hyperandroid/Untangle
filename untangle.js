@@ -787,7 +787,7 @@
      * Futures expect value observers to register via a call to <code>waitForValueSet</code>.
      *
      * If you want to test for a valid value in the Future object, a call to <code>isValueSet</code> must
-     * be performed to know wheter a value has been set, followed by a call to <code>getValue</code> which
+     * be performed to know whether a value has been set, followed by a call to <code>getValue</code> which
      * will return the actual value set in this Future object.
      *
      * @return {*}
@@ -834,8 +834,10 @@
          * @param v {Object}
          */
         setValue : function( v ) {
-            this.value= v;
-            this.valueSetCondition.setTrue();
+            if ( !this.valueSetCondition.isTrue() ) {
+                this.value= v;
+                this.valueSetCondition.setTrue();
+            }
         },
 
         /**
@@ -865,24 +867,19 @@
     /**
      * This class is for internal use of a Dispatcher/Pool object.
      *
-     * If the value to task is a function, it will be used as a worker asynchronous function.
-     * If the value to task is an Array, it will assume we're passing an Array of functions that will be executed
-     * as a single unit in the worker. This unit will chain the array function calls and passing the return
-     * value from one function as parameter to the next. When all the functions have been executed, the final
-     * functions return parameter will be set as this WorkerTask´s Future object value.
+     * The task object is expected to be a function receiving a <code>_u.Future</code> object,
+     * but it may be a closure which behaves distinctly depending on the function called in the
+     * <code>_u.Dispatcher</code> object.
      *
-     * If any of these chained functions return an Error object, the function chain call will be halted, and
-     * the Error object will be set as this WorkerTask´s Future object value.
+     * A chained call, may be interrupted by external events:
      *
-     * A chained call, may be interrupted by external events.
-     *
-     * + if a timeout event is generated, the chain execution will stop, the _u.WorkerTask disabled (no condition
+     * + if a timeout event is generated, the function execution will stop and the _u.WorkerTask disabled (no condition
      *   or callback notification). The worker will be killed, and a new one will be created.
      * + if one function in the chain sets the Future's parameter to an Error instance, the chain call will stop
      *   and the worker will be reused.
      *
      *
-     * @param task {( function( _u.Future ) | Array.<function( _u.Future, object )> )}
+     * @param task {function( _u.Future}
      * @param timeout {number}
      * @return {*}
      * @constructor
@@ -1108,7 +1105,7 @@
      */
     _u.Dispatcher = function( concurrency ) {
         this.concurrency= concurrency || 1;
-        this.workers= __createWorkers(this,concurrency);
+        this.workers= __createWorkers(this,this.concurrency);
         this.pendingTasks = [];
         this.isEmptySignal= new _u.Signal();
         return this;
@@ -1152,7 +1149,7 @@
             return task.getFuture();
         },
 
-        submitNodeSerie : function( _task, _timeout ) {
+        submitNodeSequence : function( _task, _timeout ) {
 
             var task;
 

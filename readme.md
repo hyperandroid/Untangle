@@ -25,11 +25,68 @@ Untangle offsers a wide variety of objects including:
  * ConditionTree
  * ParallelCondition
  * Future
- * WorkerTask
  * Worker
  * Dispatcher
 
-Dispatcher has several working options.
+
+## Dispatcher
+
+A Dispatcher object sequences the execution of tasks. Internally allocates a predefined number of
+_u.Worker instances to handle the submitted asynchronous tasks. When there's no available Worker instances
+because they are all busy, a Dispatcher object queues the task submission requests.
+
+A dispatcher, accepts asynchronous functions through out the following methods:
+
+* submit( {function( _u.Future ), timeout )
+* submitNodeSequence( {( function | Array.<function()> )}, timeout )
+* submitChained( {function( _u.Condition, * )}, timeout )
+
+as a result of all calling these methods, a Dispatcher instance returns a <code>_u.Future</code> object upon which
+you can register to know when the submitted task has been executed, and what was the resulting return value.
+
+Each task can be submitted with its own timeout control. This timeout starts counting since the moment the task
+is scheduled, not since it is submitted to the Dispatcher object.
+
+The Dispatcher will handle a list of submitted tasks and the specified number of _u.Worker objects
+in an attempt to sequentially execute tasks.
+If more than one worker is specified in the constructor, there's no sequential execution guarantee
+since the workers will have tasks executed on demand.
+
+When one worker expires, the Dispatcher simply creates a new one and kills expired Workers's observers. This means,
+that a task running in a Worker may still be active when it has timed out, but it is guaranteed it will not notify
+the task associated Future object.
+
+### submit function.
+
+This is the very basic way of working for a dispatcher object.
+A function which receives a Future object instance is passed as parameter. The same Future object is returned when
+calling submit.
+
+The task is scheduled to be executed sometime in the future.
+
+```javascript
+
+var dispatcher= new _u.Dispatcher();    // create 1 worker.
+
+var future= dispatcher.submit( function(f) {
+        setTimeout( function() {        // simulate asynchronous by timeout-ing a function.
+
+                // f and the return Future object, are the same one.
+                f.setValue("value from the future");
+
+            },
+            200 );
+    }, 0 ); // submit w/o timeout
+
+// pass along this future object, for lazy evaluation.
+
+future.waitForValueSet( function(f) {
+    console.log("Value from the future: "+f.getValue());
+});
+
+```
+
+
 
 ## Signal
 
@@ -388,7 +445,8 @@ parallel2.execute();
 ## Future
 
 Future objects are holders for values of functions (asynchronous or not) which have not been yet executed.
-Futures have stateful semantics and their values can be set only once.
+Futures have stateful semantics and their values can be set only once. Internally, a Future object holds a
+<code>_u.Condition</code> object to track this future's status.
 
 Futures expect value observers to register via a call to <code>waitForValueSet</code>.
 
@@ -396,4 +454,31 @@ If you want to test for a valid value in the Future object, a call to <code>isVa
 be performed to know whether a value has been set, followed by a call to <code>getValue</code> which
 will return the actual value set in this Future object, which can be whichever, including undefined and null.
 
-These Future objects are the base callback results coming from scheduled functions in a @link{_u.Dispatcher} object.
+These Future objects are the base callback results coming from scheduled functions in a <code>_u.Dispatcher</code>
+object.
+
+```javascript
+
+// this example is quite naive. But think about future objects as yet to happen events in the future.
+var future= new _u.Future().waitForValueSet( function(future) {
+    console.log("Future object got value: "+future.getValue());
+});
+
+// somewhere else:
+future.setValue("abcd");
+
+```
+
+## Worker
+
+A Worker is the heart of Dispatcher/Pool objects.
+It keeps all the logic needed to execute asynchronous tasks, timeout them, and all the mechanics for
+notifying about its internal activity:
+
+* is busy executing an asynchronous function
+* is timed out. Timeout is just a notification, since the running asynchronous function can't be cancelled.
+
+It is not expected that the developer will be managing Worker objects directly.
+
+A worker executes all of its tasks in the next tick.
+
