@@ -143,7 +143,7 @@ sequencer.submitNodeSequence( [
             console.log("sequencer seq1");
             fs.readFile('/tmp/this will cause an error.nfo', 'utf-8', this);  // set this as asynchronous function callback
         },
-        function fn2( err, content ) {                  // content has the return value for fs.readFile
+        function fn2( err, content ) {                  // content is undefined since an err ocurred.
             if (err) {
                 console.log("error reading file");
                 throw new Error("error node series");
@@ -152,20 +152,23 @@ sequencer.submitNodeSequence( [
             console.log(content);
             return 1
         },
-        function fn3( err, abcd ) {                     // abcd has value 1.
+        function fn3( err, abcd ) {                     // abcd has not value 1 and err has an Error object
             console.log("Err has value: "+err);
             console.log("sequencer seq3");
-            return "All set";                       // if no return value, the future will get undefined
+            return "All set";                           // if no return value, the future will get undefined
         }
     ],
     0,
-    false ).                                        // will not halt on error.
+    false ).                                            // WILL NOT HALT ON ERROR
     waitForValueSet( function(future) {
         console.log("Future2 set value: "+future.getValue());
     });
 
     // in this case, fn3 will receive an Error object as err parameter.
 ```
+
+### submitChained
+
 
 ### submit
 
@@ -193,7 +196,7 @@ var future= dispatcher.submit( function(f) {
         },
         500 );
     },
-    1000 ); // submit w/o timeout
+    1000 ); // submit with 1000ms timeout
 
 // pass along this future object, for lazy evaluation.
 future.waitForValueSet( function(f) {
@@ -210,7 +213,7 @@ var future2= dispatcher.submit( function(f) {
         },
         200 );
     },
-    100 ); // submit w/o timeout
+    100 ); // submit with 100ms timeout
 
 future2.waitForValueSet( function(f) {
     console.log("Value from the future: "+f.getValue());
