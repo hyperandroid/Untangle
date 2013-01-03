@@ -386,3 +386,14 @@ parallel2.execute();
 ```
 
 ## Future
+
+Future objects are holders for values of functions (asynchronous or not) which have not been yet executed.
+Futures have stateful semantics and their values can be set only once.
+
+Futures expect value observers to register via a call to <code>waitForValueSet</code>.
+
+If you want to test for a valid value in the Future object, a call to <code>isValueSet</code> must
+be performed to know whether a value has been set, followed by a call to <code>getValue</code> which
+will return the actual value set in this Future object, which can be whichever, including undefined and null.
+
+These Future objects are the base callback results coming from scheduled functions in a @link{_u.Dispatcher} object.
