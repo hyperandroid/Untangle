@@ -116,9 +116,9 @@ The timer will be cancelled when the Condition has its value set either true or 
 which will call <code>Condition.setFalse()</code>
 
 You can wait for value changes on a condition by calling
-<li><code>waitForTrue(callback)</code>
-<li><code>waitForFalse(callback)</code>
-<li><code>waitForStateChange(callback)</code>
+* <code>waitForTrue(callback)</code>
+* <code>waitForFalse(callback)</code>
+* <code>waitForStateChange(callback)</code>
 
 in all three cases, the callback function will receive the Condition as parameter.
 
@@ -300,11 +300,89 @@ conditiontree3.setTimeout(200); // wait up to 200 ms for this condition to becom
 
 A parallel condition object defines a ConditionTree where each condition is associated with an asynchronous
 executing function.
-It expects a list of functions or other ParallelCondition objects to be asynchronously executed.
+It expects a list of functions or other ParallelCondition objects to be asynchronously executed. Each function
+to be parallel executed receives a Condition object as parameter which must be either <code>setTrue()</code>
+or <code>setFalse()</code>.
+When the ParallelCondition is met, already executing asynchronous functions can't be stopped, but they'll have no
+effect in the ParallelCondition value.
 
-As a ConditionTree, it will short circuit the condition notification as fast as possible.
-
-It inherits all the behavior from ConditionTree and hence from Condition.
+ParallelCondition inherits all the behavior from ConditionTree and hence from Condition.
+The main difference between ParallelCondition and ConditionTree is that ParallelCondition expects asynchronous
+executing functions whereas ConditionTree does not. For all the rest, they behave exactly the same (timeout,
+, Condition value set behavior, etc.).
 
 ```javascript
+
+
+// create a ParallelCondition as a Boolean OR.
+// both functions will be asynchronously called.
+var parallel1= new _u.ParallelCondition( [
+            function( condition ) {
+                setTimeout( function() {
+                    console.log("Asynch function 11 done.");
+                    condition.setFalse();
+                },
+                200);
+            },
+
+            function( condition ) {
+                setTimeout( function() {
+                    console.log("Asynch function 12 done.");
+                    condition.setTrue();
+                },
+                300);
+            }
+        ],
+        0 // 0 means no timeout
+    ).
+    setId("Parallel Condition 1").
+    setBooleanOperator( _u.ConditionTree.BOOLEAN_OPERATOR.OR ).
+    waitForTrue( function( condition ) {
+        console.log("Condition '"+condition.getId()+"' is true.");
+    }).
+    waitForFalse( function( condition ) {
+        console.log("Condition '"+condition.getId()+"' is false.");
+    }).
+    waitForTimeout( function( condition ) {
+        console.log("Condition '"+condition.getId()+"' is timeout.");
+    });
+
+
+// define a bigger ParallelCondition object.
+// Mix two asynchronous functions with the previous ParallelConditionTree.
+var parallel2= new _u.ParallelCondition( [
+            function( condition ) {
+                setTimeout( function() {
+                    console.log("Asynch function 21 done.");
+                    condition.setTrue();
+                },
+                100);
+            },
+
+            function( condition ) {
+                setTimeout( function() {
+                    console.log("Asynch function 22 done.");
+                    condition.setTrue();
+                },
+                430);
+            },
+
+            parallel1
+        ],
+        0 ).
+    setId("Parallel Condition 2").
+    setBooleanOperator( _u.ConditionTree.BOOLEAN_OPERATOR.AND ).
+    waitForTrue( function( condition ) {
+        console.log("Condition '"+condition.getId()+"' is true.");
+    }).
+    waitForFalse( function( condition ) {
+        console.log("Condition '"+condition.getId()+"' is false.");
+    }).
+    waitForTimeout( function( condition ) {
+        console.log("Condition '"+condition.getId()+"' is timeout.");
+    });
+
+parallel2.execute();
 ```
+
+## Future

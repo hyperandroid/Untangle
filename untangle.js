@@ -111,7 +111,7 @@
     /**
      * _u.Signal is a string-based observer substitution. Instead of registering events by (commonly) string,
      * the signal gives context to the event by creating an object which takes care of notifying its observers.
-     * It aldo takes care of all the burden of managing observers, registering, nofitying, etc.
+     * It also takes care of all the burden of managing observers, registering, notifying, etc.
      *
      * It allows to registers single and multi shot observers.
      *
@@ -141,6 +141,10 @@
          */
         observersOnce   : null,
 
+        on : function( f ) {
+            return this.addListener(f);
+        },
+
         /**
          * Add a multishot observer.
          * @param f {Function(*)} a callback function with variable parameters.
@@ -156,7 +160,7 @@
          * @param f {Function(*)} a callback function with variable parameters.
          * @return {*}
          */
-        addListenerPrioritized : function( f ) {
+        addListenerInFrontOfList : function( f ) {
             this.observers.unshift( f );
             return this;
         },
@@ -191,6 +195,7 @@
          */
         addListenerOnce : function(f) {
             this.observersOnce.push(f);
+            return this;
         },
 
         /**
@@ -214,15 +219,16 @@
 
 
 
+    var __conditionIndex= 0;
     /**
      * _u.Condition is a wrapper for a tri-state condition.
      *
      * The need for a Condition object is that of statefulness. In certain situations, you want to know
      * whether certain condition has happened in time, and whether it was true or false.
      *
-     * A condition, unless reseted (call no setNotSet), will only notify once for each state.
+     * A condition, unless reset (call no setNotSet), will only notify once for each state.
      * If setTrue is called, successive calls to setTrue won't have any effect.
-     * The same with setFalse. But will nofity stateChanges from true to false or vice versa.
+     * The same with setFalse. But will notify stateChanges from true to false or vice versa.
      *
      * Resetting a Condition is achieved with a call to <code>setNotSet</code> and means turning the condition
      * to its original state, which is NOT_SET, aka the Condition has never been met.
@@ -231,7 +237,7 @@
      * holds a Signal object.
      *
      * Conditions can have associated a timeout. If the timer expires, the Condition is automatically set to
-     * false buy calling <code>setFalse()</code>.
+     * false by calling <code>setFalse()</code>.
      *
      * You can wait for value changes on a condition by calling
      * <li><code>waitForTrue(callback)</code>
@@ -266,6 +272,7 @@
         this.signalConditionStateChange= new _u.Signal();
         this.signalTimeout= new _u.Signal();
         this.b_condition= _u.Condition.VALUES.NOT_SET;
+        this.id= 'Condition'+__conditionIndex++;
 
         return this;
     };
@@ -283,30 +290,45 @@
 
         /**
          * internal state value {_u.Condition}
+         * @type {_u.Condition.VALUES}
          * @private
          */
         b_condition     : null,
 
         /**
          * Signal to emit state change events {_u.Signal}
+         * @type {_u.Signal}
          * @private
          */
         signalConditionStateChange : null,
 
         /**
          * Signal to emit condition timed out.
+         * @type {_u.Signal}
          */
         signalTimeout : null,
+
+        /**
+         * Arbitrary id.
+         * @type {*}
+         */
+        id : null,
+
+        getId : function() {
+            return this.id;
+        },
+
+        setId : function( id ) {
+            this.id= id;
+            return this;
+        },
 
         /**
          * Emit condition state change events.
          * @private
          */
         __emit : function() {
-            this.signalConditionStateChange.emit({
-                condition : this,
-                value : this.b_condition
-            });
+            this.signalConditionStateChange.emit(this);
         },
 
         /**
@@ -331,7 +353,7 @@
         /**
          * Set a condition as true.
          * If the condition was false, nothing happens.
-         * Otherwise, the internal status will be <code>_u.Condition.VALUES.FALSE</code>.
+         * Otherwise, the internal status will be a value from <code>_u.Condition.VALUES.FALSE</code>.
          * Observers of this condition will be notified of the state change.
          * @return {*}
          */
@@ -404,7 +426,7 @@
             } else {
                 (function(me, callback) {
                     me.signalConditionStateChange.addListener( function( condition ) {
-                        if (condition.value) {
+                        if (condition.isTrue()) {
                             callback( me );
                         }
                     });
@@ -427,7 +449,7 @@
             } else {
                 (function(me, callback) {
                     me.signalConditionStateChange.addListener( function( condition ) {
-                        if (!condition.value) {
+                        if (condition.isFalse()) {
                             callback( me );
                         }
                     });
@@ -494,6 +516,14 @@
         disable : function() {
             this.signalConditionStateChange.removeAllListeners();
             this.signalTimeout.removeAllListeners();
+        },
+
+        /**
+         * Return this Condition's internal value.
+         * @return {*}
+         */
+        getCurrentValue : function() {
+            return this.b_condition;
         }
     };
 
@@ -552,17 +582,17 @@
         __isTrueOr : function() {
             var i, l;
             var ret= _u.Condition.VALUES.NOT_SET;
+            var notSet= false;
 
             for( i= 0, l=this.children.length; i<l; i++ ) {
                 if ( this.children[i].isTrue() ) {
-                    ret= _u.Condition.VALUES.TRUE;
-                    break;
-                } else if ( this.children[i].isFalse() ) {
-                    ret= _u.Condition.VALUES.FALSE;
+                    return _u.Condition.VALUES.TRUE;
+                } else  if ( this.children[i].isNotSet() ) {
+                    notSet= true;
                 }
             }
 
-            return ret;
+            return notSet ? _u.Condition.VALUES.NOT_SET : _u.Condition.VALUES.FALSE;
         },
 
         /**
@@ -572,16 +602,17 @@
          */
         __isTrueAnd : function() {
             var i, l;
+            var notSet= false;
 
             for( i= 0, l=this.children.length; i<l; i++ ) {
                 if ( this.children[i].isFalse() ) {
                     return _u.Condition.VALUES.FALSE;
                 } else if ( this.children[i].isNotSet() ) {
-                    return _u.Condition.VALUES.NOT_SET;
+                    notSet= true;
                 }
             }
 
-            return _u.Condition.VALUES.TRUE;
+            return notSet ? _u.Condition.VALUES.NOT_SET : _u.Condition.VALUES.TRUE;
         },
 
         /**
@@ -610,10 +641,10 @@
 
         /**
          * Invoked when a condition in this tree changes value.
-         * @param object.< _u.Condition, boolean >
+         * @param _u.Condition
          * @private
          */
-        __conditionChanged : function(object) {
+        __conditionChanged : function(condition) {
             if ( this.isNotSet() ) {
                 switch( this.__isTrue() ) {
                     case _u.Condition.VALUES.NOT_SET:
@@ -633,7 +664,7 @@
          */
         reset : function() {
             _u.ConditionTree.superclass.reset.call(this);
-            this.children.each( function(elem) {
+            this.children.forEach( function(elem) {
                 elem.reset();
             });
         }
@@ -887,7 +918,7 @@
 
 
 
-    var __index= 0;
+    var __workerIndex= 0;
     /**
      * A Worker is the heart of Dispatcher and Pool objects.
      * It keeps all the logic needed to execute asynchronous tasks, timeout them, and all the mechanics for
@@ -900,7 +931,7 @@
      * @constructor
      */
     _u.Worker= function() {
-        this.id= "worker"+__index++;
+        this.id= "worker"+__workerIndex++;
 
         this.workingCondition= new _u.Condition();
         this.timeoutCondition= new _u.Condition();
