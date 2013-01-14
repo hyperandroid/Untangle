@@ -169,11 +169,13 @@ sequencer.submitNodeSequence( [
 
 ### submitChained
 
+This function builds a chain of function calls.
+Each function is intended to be receiving as parameter a Future object, which
 
 ### submit
 
 This is the very basic way of working for a dispatcher object.
-A function which receives a Future object instance is passed as parameter. The same Future object is returned when
+A function which receives a Future object instance passed as parameter. The same Future object is returned when
 calling submit.
 This function is intended for wrapping up NodeJS legacy code. Take all the asynchronous callback tangle and put
 it all into one single schedulable function.

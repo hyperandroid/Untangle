@@ -1087,6 +1087,20 @@
         return worker;
     }
 
+
+    _u.DispatcherError= function( ex, stacktrace ) {
+
+        this.getException= function() {
+            return ex;
+        };
+
+        this.getStackTrace= function() {
+            return stacktrace;
+        };
+
+        return this;
+    };
+
     /**
      * A Dispatcher object sequences the execution of tasks. Internally allocates a predefined number of
      * _u.Worker instances to handle the submitted asynchronous tasks.
@@ -1110,6 +1124,89 @@
         this.isEmptySignal= new _u.Signal();
         return this;
     };
+
+    /**
+     *
+     * @param _task {Array.<function>}
+     * @param auditArguments {Array.<{ Array, Object }>}
+     * @param fnIndex {number}
+     *
+     * @private
+     *
+     * @return {string}
+     */
+    function __getSequenceStackTrace( _task, auditArguments, fnIndex ) {
+
+        function __stringify( v ) {
+            try {
+                return JSON.stringify( v );
+            } catch(e1) {
+                return v.toString();
+            }
+        }
+
+        function __args( args ) {
+            str= 'args=[';
+            for( j=0; j<args.length; j++ ) {
+                str+= __stringify(args[j]);
+                if ( j<args.length-1 ) {
+                    str+= ',';
+                }
+            }
+            str+= ']';
+
+            return str;
+        }
+
+        var str= '';
+        var fnStr;
+        var strtmp;
+        var args;
+        var i;
+        var j;
+        var auditArgument;
+        for( i=0; i<_task.length; i++ ) {
+
+            auditArgument= i<auditArguments.length ? auditArguments[i] : null;
+
+            fnStr= _task[i].toString();
+            strtmp= fnStr.substring(0,fnStr.indexOf('{'));
+            if ( i===fnIndex-1 ) {
+                str+= '[errored] -->' + strtmp;
+                /*
+                str+= '  error: [';
+                try {
+                    str+= JSON.stringify( auditArgument.ret );
+                } catch(e2) {
+                    str+= auditArgument.ret.toString();
+                }
+                str+=']';
+*/
+
+            } else if (i===fnIndex ) {
+                str+= '[current] -->' + strtmp;
+            } else if ( i>fnIndex ) {
+                str+= '*' + strtmp;
+            } else {
+                str+= strtmp;
+            }
+
+            if ( auditArgument ) {
+                str+= '  ';
+                str+= __args( auditArgument.args );
+
+                str+= '  ';
+                str+= 'ret=[';
+                str+= __stringify( auditArgument.ret );
+                str+= ']';
+            }
+
+            str+='\n';
+        }
+
+        return str;
+
+    }
 
     _u.Dispatcher.prototype= {
 
@@ -1169,38 +1266,47 @@
                     task= function(future) {
 
                         var pendingTasks= Array.prototype.slice.call( _task );
+                        var fnIndex= 0;
+                        var auditArguments= [];
+                        var me= this;
 
                         function iterate() {
-/**
-                            if (pendingTasks.length===0) {
-                                if (arguments[0]) {
-                                    future.setValue(arguments[0]);
-                                }
-                                return;
-                            }
-*/
+
                             var fn= pendingTasks.shift();
                             var retValue;
+
+                            fnIndex+=1;
+
+                            var auditArgument= {
+                                args : Array.prototype.slice.call(arguments),
+                                ret : undefined
+                            };
+                            auditArguments.push( auditArgument );
 
                             try {
                                 retValue= fn.apply( iterate, arguments );
                                 if (retValue && pendingTasks.length) {
                                     iterate(undefined, retValue);
                                 }
+
+                                auditArgument.ret= retValue;
+
                                 if (pendingTasks.length===0) {
                                     future.setValue(retValue);
                                 }
                             } catch(e) {
+
+                                auditArgument.ret= e;
+
                                 if (haltOnError) {
-                                    future.setValue(e);
+                                    future.setValue( new _u.DispatcherError(
+                                        e,
+                                        __getSequenceStackTrace( _task, auditArguments, fnIndex )
+                                    ) );
                                 } else {
                                     iterate(e);
                                 }
                             }
-
-
-
-
 
                         }
 
@@ -1215,73 +1321,24 @@
             return this.submit( task, _timeout );
         },
 
-        /**
-         * Submit an array of tasks for asynchronous execution.
-         * Tasks will be sequentially executed.
-         * Each function accepts two parameter: an error Condition object which will halt serie execution if has
-         * a value set. And an arbitrary object which is the return value from the previous executing function.
-         * @param _task
-         * @param _timeout
-         */
-        submitChained : function( _task, _timeout ) {
-
-            var task;
-
-            if ( Object.prototype.toString.call( _task ) === '[object Array]' ) {
-
-                // trivial.
-                // an empty array has been set.
-                if ( _task.length===0 ) {
-                    task= function(future) {
-                        future.setValue(true);
-                    }
-                } else {
-
-                    task= function(future) {
-
-                         var index= 0;
-
-                         function iterate(initialValue) {
-
-                             var chain= new _u.Future();
-                             chain.waitForValueSet( function(f) {
-                                 if ( f.isValueSet() && f.getValue() instanceof Error ) {
-                                     if (!future.isValueSet()) {
-                                         console.warn("Dispatcher chain errored. Reason: '"+f.getValue()+"'");
-                                         future.setValue( f.getValue() );
-                                     }
-                                 } else {
-                                     index++;
-                                     if ( index===_task.length ) {
-                                         future.setValue(f.getValue());
-                                     } else {
-                                         if (future.isValueSet()) {
-                                             // some external event, like a timeout, has triggered this task's Future
-                                             // object value.
-                                             console.warn("Dispatcher chain call interrupted: '"+future.getValue()+"'");
-                                         } else {
-
-                                             // reschedule next part of the function chain, and pass along
-                                             // last function's return value as next function's parameter.
-                                             _u.schedule( iterate(f.getValue()), 0 );
-                                         }
-                                     }
-                                 }
-                             });
-
-                             _task[index](chain, initialValue);
-
-                         }
-
-                         iterate(undefined);
-                    }
-                }
-            } else {
-                task= _task;
+        submitCondition : function( _condition, _timeout ) {
+            if ( !(_condition instanceof _u.ParallelCondition) ) {
+                return;
             }
 
-            return this.submit( task, _timeout );
+            return this.submit( function( future ) {
 
+                _condition.waitForTrue( function() {
+                    future.setValue(true);
+                });
+                _condition.waitForFalse( function() {
+                    future.setValue(true);
+                });
+
+                _condition.execute();
+
+            },
+            _timeout );
         },
 
         /**
