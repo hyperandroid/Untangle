@@ -192,10 +192,12 @@ waitForValueSet( function(future) {
 
 this will give an output like:
 
-  - function seq1( err )   args=[]  ret=[undefined]
-  - [errored] -->function seq2( err, content )   args=[null,"contents of the file here"] ret=[undefined]
-  + [current] -->function seq3( err, abcd )
-  + function seq4(err)
+(-) function seq1( err )   args=[]  ret=[undefined]
+(-) [errored] -->function seq2( err, content )   args=[null,"contents of the file here"] ret=[undefined]
+(+) [current] -->function seq3( err, abcd )
+(+) function seq4(err)
+
+
 
 * A minus (-) in front of the function means it has been executed.
 * A plus (+) in front of the function means it´s **not** been executed.
