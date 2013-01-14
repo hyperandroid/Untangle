@@ -1172,7 +1172,7 @@
             fnStr= _task[i].toString();
             strtmp= fnStr.substring(0,fnStr.indexOf('{'));
             if ( i===fnIndex-1 ) {
-                str+= '[errored] -->' + strtmp;
+                str+= '- [errored] -->' + strtmp;
                 /*
                 str+= '  error: [';
                 try {
@@ -1184,11 +1184,11 @@
 */
 
             } else if (i===fnIndex ) {
-                str+= '[current] -->' + strtmp;
+                str+= '+ [current] -->' + strtmp;
             } else if ( i>fnIndex ) {
-                str+= '*' + strtmp;
+                str+= '+ ' + strtmp;
             } else {
-                str+= strtmp;
+                str+= '- ' + strtmp;
             }
 
             if ( auditArgument ) {

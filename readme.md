@@ -70,6 +70,7 @@ fn( p0, p1, p2, function(err) {
 
   fn2( a1, a2, function(err) {
     ...
+    ... // and so on chaning nested callbacks
   }
 
 }
@@ -92,7 +93,7 @@ var future= dispatcher.submitAsNodeSequence([
 ```
 
 Each Sequence function must follow NodeJS convention by having a first err parameter.
-And in order to have the function sequence flowing, each function must:
+And in order to have the function sequence flowing, each function must **either**:
 
 * return a value, which will be set as second parameter for the next sequence function
 * set 'this' as asynchronous function callback
@@ -167,10 +168,45 @@ sequencer.submitNodeSequence( [
     // in this case, fn3 will receive an Error object as err parameter.
 ```
 
-### submitChained
+Additionally, when haltOnError is set, you can get the sequence stackTrace and their arguments to the point of fail.
+You get to the point of halt because one of the array functions `threw` something.
+To the the stacktrace you could for example improve the previous example with:
 
-This function builds a chain of function calls.
-Each function is intended to be receiving as parameter a Future object, which
+``` javascript
+
+sequencer.submitNodeSequence( [...], 0 ).
+waitForValueSet( function(future) {
+
+        var v= future.getValue();
+
+        if (v instanceof _u.DispatcherError ) {
+            console.log("Future1 error: ");
+            console.log("\tException: "+ v.getException());
+            console.log("\tStackTrace: "+ v.getStackTrace());
+        } else {
+            console.log("Future1 set value: "+v);
+        }
+    });
+
+```
+
+this will give an output like:
+
+- function seq1( err )   args=[]  ret=[undefined]
+- [errored] -->function seq2( err, content )   args=[null,"contents of the file here"] ret=[undefined]
++ [current] -->function seq3( err, abcd )
++ function seq4(err)
+
+* A minus (-) in front of the function means it has been executed.
+* A plus (+) in front of the function means it´s **not** been executed.
+
+This means if haltOnError parameter is true, the function sequence execution is interrupted, and the function
+marked as current has not been called.
+
+### submitCondition
+
+This function allow to pass a `_u.ParallelCondition` object to a `_u.Dispatcher` instance.
+The future value will be set with the result of the ParallelCondition.
 
 ### submit
 
